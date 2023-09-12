@@ -17,11 +17,21 @@ import random
 import logging
 
 import discord
-import youtube_dl
+import yt_dlp as youtube_dl
 from async_timeout import timeout
 from discord.ext import commands
 import httpx
 from bs4 import BeautifulSoup
+
+import vlc
+
+
+player = vlc.MediaPlayer()
+
+def vlc_playNow(url):
+    print("SET TO PLAY")
+    player.set_mrl(url)
+    player.play()
 
 # Silence useless bug reports messages
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -126,6 +136,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
                     raise YTDLError('Couldn\'t retrieve any matches for `{}`'.format(webpage_url))
         
         return cls(ctx, discord.FFmpegPCMAudio(info['url'], **cls.FFMPEG_OPTIONS), data=info)
+
 
     @classmethod
     async def search_source(cls, ctx: commands.Context, search: str, *, loop: asyncio.BaseEventLoop = None):
@@ -259,7 +270,6 @@ class VoiceState:
         self._ctx = ctx
 
         self.current = None
-        self.voice = None
         self.next = asyncio.Event()
         self.songs = SongQueue()
         self.exists = True
@@ -300,10 +310,11 @@ class VoiceState:
 
     @property
     def is_playing(self):
-        return self.voice and self.current
+        return player.is_playing() and self.current
 
     async def audio_player_task(self):
         while True:
+            print("WHAT DOING")
             self.next.clear()
             self.now = None
 
@@ -315,82 +326,50 @@ class VoiceState:
                 # If no song will be added to the queue in time,
                 # the player will disconnect due to performance
                 # reasons.
-                if self.autoplay:
-                    try:
-                        async with timeout(3): 
-                            self.current = await self.songs.get()
-                    except asyncio.TimeoutError:
-                        # Spoof user agent to show whole page.
-                        headers = {'User-Agent' : 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)'}
-                        song_url = self.current.source.url
-                        # Get the page
-                        async with httpx.AsyncClient() as client:
-                            response = await client.get(song_url, headers=headers)
 
-                        soup = BeautifulSoup(response.text, features='lxml')
-
-                        # Parse all the recommended videos out of the response and store them in a list
-                        recommended_urls = []
-                        for li in soup.find_all('li', class_='related-list-item'):
-                            a = li.find('a')
-
-                            # Only videos (no mixes or playlists)
-                            if 'content-link' in a.attrs['class']:
-                                recommended_urls.append(f'https://www.youtube.com{a.get("href")}')
-
-                        ctx = self._ctx
-
-                        async with ctx.typing():
-                            try:
-                                source = await YTDLSource.create_source(ctx, recommended_urls[0], loop=self.bot.loop)
-                            except YTDLError as e:
-                                await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
-                                self.bot.loop.create_task(self.stop())
-                                self.exists = False
-                                return
-                            else:
-                                song = Song(source)
-                                self.current = song
-                                await ctx.send('Enqueued {}'.format(str(source)))
-                        
-                else:
-                    try:
-                        async with timeout(180):  # 3 minutes
-                            self.current = await self.songs.get()
-                    except asyncio.TimeoutError:
-                        self.bot.loop.create_task(self.stop())
-                        self.exists = False
-                        return
+                
+                try:
+                    async with timeout(180):  # 3 minutes
+                        self.current = await self.songs.get()
+                except asyncio.TimeoutError:
+                    self.bot.loop.create_task(self.stop())
+                    self.exists = False
+                    return
                 
                 self.current.source.volume = self._volume
-                self.voice.play(self.current.source, after=self.play_next_song)
-                await self.current.source.channel.send(embed=self.current.create_embed())
+                vlc_playNow(self.current.source.stream_url)
+                #self.voice.play(self.current.source, after=self.play_next_song)
+                #await self.current.source.channel.send(embed=self.current.create_embed())
             
             #If the song is looped
             elif self.loop == True:
-                self.now = discord.FFmpegPCMAudio(self.current.source.stream_url, **YTDLSource.FFMPEG_OPTIONS)
-                self.voice.play(self.now, after=self.play_next_song)
+                #self.now = discord.FFmpegPCMAudio(self.current.source.stream_url, **YTDLSource.FFMPEG_OPTIONS)
+                vlc_playNow(self.current.source.stream_url)
+                #self.voice.play(self.now, after=self.play_next_song)
             
             await self.next.wait()
 
     def play_next_song(self, error=None):
         if error:
             raise VoiceError(str(error))
-
+        
         self.next.set()
 
     def skip(self):
         self.skip_votes.clear()
 
         if self.is_playing:
-            self.voice.stop()
+            if len(self.songs)>0:
+                self.play_next_song()
+            else:
+                self.stop()
+        
 
     async def stop(self):
         self.songs.clear()
+        player.stop()
 
-        if self.voice:
-            await self.voice.disconnect()
-            self.voice = None
+      
 
 
 class Music(commands.Cog):
@@ -432,42 +411,15 @@ class Music(commands.Cog):
     @commands.command(name='join', invoke_without_subcommand=True)
     async def _join(self, ctx: commands.Context):
         """Joins a voice channel."""
+        pass
+        #destination = ctx.author.voice.channel
+        #if ctx.voice_state.voice:
+        #    await ctx.voice_state.voice.move_to(destination)
+        #    return
 
-        destination = ctx.author.voice.channel
-        if ctx.voice_state.voice:
-            await ctx.voice_state.voice.move_to(destination)
-            return
+        #ctx.voice_state.voice = await destination.connect()
 
-        ctx.voice_state.voice = await destination.connect()
-
-    @commands.command(name='summon')
-    @commands.has_permissions(manage_guild=True)
-    async def _summon(self, ctx: commands.Context, *, channel: discord.VoiceChannel = None):
-        """Summons the bot to a voice channel.
-        If no channel was specified, it joins your channel.
-        """
-
-        if not channel and not ctx.author.voice:
-            raise VoiceError('You are neither connected to a voice channel nor specified a channel to join.')
-
-        destination = channel or ctx.author.voice.channel
-        if ctx.voice_state.voice:
-            await ctx.voice_state.voice.move_to(destination)
-            return
-
-        ctx.voice_state.voice = await destination.connect()
-
-    @commands.command(name='leave', aliases=['disconnect'])
-    @commands.has_permissions(manage_guild=True)
-    async def _leave(self, ctx: commands.Context):
-        """Clears the queue and leaves the voice channel."""
-
-        if not ctx.voice_state.voice:
-            return await ctx.send('Not connected to any voice channel.')
-
-        await ctx.voice_state.stop()
-        del self.voice_states[ctx.guild.id]
-
+  
     @commands.command(name='volume')
     @commands.is_owner()
     async def _volume(self, ctx: commands.Context, *, volume: int):
@@ -482,6 +434,13 @@ class Music(commands.Cog):
         ctx.voice_state.volume = volume / 100
         await ctx.send('Volume of the player set to {}%'.format(volume))
 
+    @commands.command(name='debug')
+    @commands.is_owner()
+    async def _debug(self, ctx: commands.Context):
+        """Sets the volume of the player."""
+        for key, value in self.voice_states.items():
+            print(value.__dict__)
+
     @commands.command(name='now', aliases=['current', 'playing'])
     async def _now(self, ctx: commands.Context):
         """Displays the currently playing song."""
@@ -493,8 +452,8 @@ class Music(commands.Cog):
     async def _pause(self, ctx: commands.Context):
         """Pauses the currently playing song."""
         print(">>>Pause Command:")
-        if ctx.voice_state.is_playing and ctx.voice_state.voice.is_playing():
-            ctx.voice_state.voice.pause()
+        if player.is_playing() and not player.is_paused():
+            player.pause()            
             await ctx.message.add_reaction('⏯')
 
     @commands.command(name='resume', aliases=['re', 'res'])
@@ -502,8 +461,8 @@ class Music(commands.Cog):
     async def _resume(self, ctx: commands.Context):
         """Resumes a currently paused song."""
 
-        if ctx.voice_state.is_playing and ctx.voice_state.voice.is_paused():
-            ctx.voice_state.voice.resume()
+        if player.is_paused():
+            player.pause()            
             await ctx.message.add_reaction('⏯')
 
     @commands.command(name='stop')
@@ -630,12 +589,15 @@ class Music(commands.Cog):
             except YTDLError as e:
                 await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
             else:
-                if not ctx.voice_state.voice:
-                    await ctx.invoke(self._join)
-
+                #if not ctx.voice_state.voice:
+                #    await ctx.invoke(self._join)
                 song = Song(source)
+                print("requested")
                 await ctx.voice_state.songs.put(song)
                 await ctx.send('Enqueued {}'.format(str(source)))
+
+                if ctx.voice_state.current is None:
+                    ctx.voice_state.current = song
 
     @commands.command(name='search')
     async def _search(self, ctx: commands.Context, *, search: str):
@@ -658,8 +620,8 @@ class Music(commands.Cog):
                 elif source == 'timeout':
                     await ctx.send(':alarm_clock: **Time\'s up bud**')
                 else:
-                    if not ctx.voice_state.voice:
-                        await ctx.invoke(self._join)
+                    #if not ctx.voice_state.voice:
+                    #    await ctx.invoke(self._join)
 
                     song = Song(source)
                     await ctx.voice_state.songs.put(song)
@@ -668,12 +630,13 @@ class Music(commands.Cog):
     @_join.before_invoke
     @_play.before_invoke
     async def ensure_voice_state(self, ctx: commands.Context):
-        if not ctx.author.voice or not ctx.author.voice.channel:
-            raise commands.CommandError('You are not connected to any voice channel.')
-
-        if ctx.voice_client:
-            if ctx.voice_client.channel != ctx.author.voice.channel:
-                raise commands.CommandError('Bot is already in a voice channel.')
+        pass
+        #if not ctx.author.voice or not ctx.author.voice.channel:
+        #    raise commands.CommandError('You are not connected to any voice channel.')
+#
+        #if ctx.voice_client:
+        #    if ctx.voice_client.channel != ctx.author.voice.channel:
+        #        raise commands.CommandError('Bot is already in a voice channel.')
 
 
 
