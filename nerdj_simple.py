@@ -15,6 +15,8 @@ import itertools
 import math
 import random
 import logging
+import os
+import sys
 
 import discord
 import yt_dlp as youtube_dl
@@ -29,6 +31,7 @@ import vlc
 player = vlc.MediaPlayer()
 
 def vlc_playNow(url):
+    player.stop()
     print("SET TO PLAY")
     player.set_mrl(url)
     player.play()
@@ -310,7 +313,7 @@ class VoiceState:
 
     @property
     def is_playing(self):
-        return player.is_playing() and self.current
+        return player.get_state()==3  
 
     async def audio_player_task(self):
         while True:
@@ -330,23 +333,23 @@ class VoiceState:
                 
                 try:
                     async with timeout(180):  # 3 minutes
+                        print("getting song")
                         self.current = await self.songs.get()
                 except asyncio.TimeoutError:
                     self.bot.loop.create_task(self.stop())
                     self.exists = False
                     return
-                
+                print("got song")
                 self.current.source.volume = self._volume
                 vlc_playNow(self.current.source.stream_url)
                 #self.voice.play(self.current.source, after=self.play_next_song)
-                #await self.current.source.channel.send(embed=self.current.create_embed())
-            
+                print("bruh")
             #If the song is looped
             elif self.loop == True:
                 #self.now = discord.FFmpegPCMAudio(self.current.source.stream_url, **YTDLSource.FFMPEG_OPTIONS)
                 vlc_playNow(self.current.source.stream_url)
                 #self.voice.play(self.now, after=self.play_next_song)
-            
+            print("now waiting")
             await self.next.wait()
 
     def play_next_song(self, error=None):
@@ -357,17 +360,16 @@ class VoiceState:
 
     def skip(self):
         self.skip_votes.clear()
-
+        if self.songs.empty():
+            player.pause()
         if self.is_playing:
-            if len(self.songs)>0:
-                self.play_next_song()
-            else:
-                self.stop()
+            self.play_next_song()
         
 
     async def stop(self):
         self.songs.clear()
         player.stop()
+        self.current = None
 
       
 
@@ -452,7 +454,7 @@ class Music(commands.Cog):
     async def _pause(self, ctx: commands.Context):
         """Pauses the currently playing song."""
         print(">>>Pause Command:")
-        if player.is_playing() and not player.is_paused():
+        if player.get_state() == vlc.State.Playing:
             player.pause()            
             await ctx.message.add_reaction('⏯')
 
@@ -461,7 +463,7 @@ class Music(commands.Cog):
     async def _resume(self, ctx: commands.Context):
         """Resumes a currently paused song."""
 
-        if player.is_paused():
+        if player.get_state() == vlc.State.Paused:
             player.pause()            
             await ctx.message.add_reaction('⏯')
 
@@ -473,7 +475,7 @@ class Music(commands.Cog):
         ctx.voice_state.songs.clear()
 
         if ctx.voice_state.is_playing:
-            ctx.voice_state.voice.stop()
+            await  ctx.voice_state.stop()
             await ctx.message.add_reaction('⏹')
 
     @commands.command(name='skip', aliases=['s'])
@@ -496,7 +498,7 @@ class Music(commands.Cog):
 
             if total_votes >= 3:
                 await ctx.message.add_reaction('⏭')
-                ctx.voice_state.skip()
+                await ctx.voice_state.skip()
             else:
                 await ctx.send('Skip vote added, currently at **{}/3**'.format(total_votes))
 
@@ -596,8 +598,8 @@ class Music(commands.Cog):
                 await ctx.voice_state.songs.put(song)
                 await ctx.send('Enqueued {}'.format(str(source)))
 
-                if ctx.voice_state.current is None:
-                    ctx.voice_state.current = song
+                #if ctx.voice_state.current is None:
+                #    ctx.voice_state.current = song
 
     @commands.command(name='search')
     async def _search(self, ctx: commands.Context, *, search: str):
@@ -662,6 +664,14 @@ async def main():
         print('Goodbye')
         await ctx.send('Goodbye')
         await bot.logout()
+        return
+    
+    @bot.command(name='fix', aliases=['repair'])
+    @commands.is_owner()
+    async def fixbot(ctx):
+        print('Fixing...')
+        await ctx.send('Fixing myself...')
+        os.execv(sys.executable, ['python3'] + sys.argv) 
         return
     
     async with bot:
