@@ -30,6 +30,8 @@ import vlc
 
 player = vlc.MediaPlayer()
 
+mp_em = player.event_manager()
+
 def vlc_playNow(url):
     player.stop()
     print("SET TO PLAY")
@@ -283,6 +285,7 @@ class VoiceState:
         self.skip_votes = set()
 
         self.audio_player = bot.loop.create_task(self.audio_player_task())
+        mp_em.event_attach(vlc.EventType.MediaPlayerEndReached, self.play_song_if_ended)
 
     def __del__(self):
         self.audio_player.cancel()
@@ -320,43 +323,29 @@ class VoiceState:
             print("WHAT DOING")
             self.next.clear()
             self.now = None
+            print("AAAAAAA")
+            print(player.get_state())
+            if self.loop == False: 
+                print("waiting for song")               
+                self.current = await self.songs.get()
 
-            if self.loop == False:
-                # If autoplay is turned on wait 3 seconds for a new song.
-                # If no song is found find a new one,
-                # else if autoplay is turned off try to get the
-                # next song within 3 minutes.
-                # If no song will be added to the queue in time,
-                # the player will disconnect due to performance
-                # reasons.
-
-                
-                try:
-                    async with timeout(180):  # 3 minutes
-                        print("getting song")
-                        self.current = await self.songs.get()
-                except asyncio.TimeoutError:
-                    self.bot.loop.create_task(self.stop())
-                    self.exists = False
-                    return
                 print("got song")
                 self.current.source.volume = self._volume
                 vlc_playNow(self.current.source.stream_url)
-                #self.voice.play(self.current.source, after=self.play_next_song)
                 print("bruh")
             #If the song is looped
             elif self.loop == True:
                 #self.now = discord.FFmpegPCMAudio(self.current.source.stream_url, **YTDLSource.FFMPEG_OPTIONS)
                 vlc_playNow(self.current.source.stream_url)
-                #self.voice.play(self.now, after=self.play_next_song)
             print("now waiting")
             await self.next.wait()
 
-    def play_next_song(self, error=None):
-        if error:
-            raise VoiceError(str(error))
-        
+    def play_next_song(self):
         self.next.set()
+
+    def play_song_if_ended(self,event):
+        print("Song ended.")
+        self.play_next_song()   
 
     def skip(self):
         self.skip_votes.clear()
@@ -443,7 +432,7 @@ class Music(commands.Cog):
         for key, value in self.voice_states.items():
             print(value.__dict__)
 
-    @commands.command(name='now', aliases=['current', 'playing'])
+    @commands.command(name='now', aliases=['current', 'playing','np'])
     async def _now(self, ctx: commands.Context):
         """Displays the currently playing song."""
         embed = ctx.voice_state.current.create_embed()
@@ -594,10 +583,12 @@ class Music(commands.Cog):
                 #if not ctx.voice_state.voice:
                 #    await ctx.invoke(self._join)
                 song = Song(source)
-                print("requested")
                 await ctx.voice_state.songs.put(song)
                 await ctx.send('Enqueued {}'.format(str(source)))
-
+                print("requested")
+                if player.get_state() == 0 or player.get_state() == 6 or player.get_state() == 5:
+                    print("playing NOW")
+                    ctx.voice_state.play_next_song()
                 #if ctx.voice_state.current is None:
                 #    ctx.voice_state.current = song
 
@@ -628,6 +619,7 @@ class Music(commands.Cog):
                     song = Song(source)
                     await ctx.voice_state.songs.put(song)
                     await ctx.send('Enqueued {}'.format(str(source)))
+
             
     @_join.before_invoke
     @_play.before_invoke
