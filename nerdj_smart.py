@@ -465,7 +465,6 @@ class Music(commands.Cog):
             print(f"{message.guild}/{message.channel}/{message.author.name}>{message.content}")
             if message.embeds:
                 print(message.embeds[0].to_dict())
-            print("AAAAAAAAAA")
             
 
 
@@ -729,7 +728,6 @@ async def main():
     @bot.event
     async def on_ready():
         print('Logged in as:\n{0.user.name}\n{0.user.id}'.format(bot))
-       # asyncio.get_event_loop().create_task(kafka_consume(bot))
 
     @bot.command(name='botstop', aliases=['bstop'])
     @commands.is_owner()
