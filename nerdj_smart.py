@@ -427,18 +427,6 @@ async def play_rafado(search: str):
             print("playing NOW")
             voice_state_g.play_next_song()
 
-async def kafka_consume(cena):
-    consumer = KafkaConsumer('nerdj_play',bootstrap_servers='localhost:9094',client_id="nerd-j", group_id='nerd-e')
-    #msg =  cena.bot.get_channel(712710066653888563).fetch_message(1178032898989891695)
-    print("now running")
-    while True:
-        for message in consumer:
-            print(message.value.decode('utf-8'))
-            await play_rafado(message.value.decode('utf-8'))
-            #cena.true_play(cena.bot.get_context(msg),search = message.value.decode('utf-8'))
-            #channel = cena.get_channel(712710066653888563)
-            #await channel.send(f"?play {message.value.decode('utf-8')}")
-            #cena.true_play(ctx,search = message.value.decode('utf-8'))
 
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -474,10 +462,12 @@ class Music(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-#        if message.author.id != bot.user.id:
             print(f"{message.guild}/{message.channel}/{message.author.name}>{message.content}")
             if message.embeds:
                 print(message.embeds[0].to_dict())
+            print("AAAAAAAAAA")
+            
+
 
     @commands.command(name='join', invoke_without_subcommand=True)
     async def _join(self, ctx: commands.Context):
@@ -648,24 +638,6 @@ class Music(commands.Cog):
    
 
 
-    async def play_rafado(search: str):
-            try:
-                source = await YTDLSource.create_source_rafado(search, loop=bot.loop)
-            except YTDLError as e:
-                pass
-            else:
-                #if not ctx.voice_state.voice:
-                #    await ctx.invoke(self._join)
-                song = Song(source)
-                await voice_state_g.songs.put(song)
-                print("requested")
-                if player.get_state() == 0 or player.get_state() == 6 or player.get_state() == 5:
-                    print("playing NOW")
-                    voice_state_g.play_next_song()
-                #if ctx.voice_state.current is None:
-                #    ctx.voice_state.current = song
-
-
     @commands.command(name='play', aliases=['p'])
     async def _play(self, ctx: commands.Context, *, search: str):
         async with ctx.typing():
@@ -731,6 +703,13 @@ class Music(commands.Cog):
 
 
 
+class UnfilteredBot(commands.Bot):
+    """An overridden version of the Bot class that will listen to other bots."""
+
+    async def process_commands(self, message):
+        """Override process_commands to listen to bots."""
+        ctx = await self.get_context(message)
+        await self.invoke(ctx)
 
 async def main():
     intents = discord.Intents.default()
@@ -740,7 +719,9 @@ async def main():
     intents.typing = True
     intents.message_content = True
     global bot
-    bot =  commands.Bot(command_prefix='?', case_insensitive=True, description="The Superior Bot",intents=intents)
+
+
+    bot =  UnfilteredBot(command_prefix='?', case_insensitive=True, description="The Superior Bot",intents=intents)
     
 
     
@@ -748,7 +729,7 @@ async def main():
     @bot.event
     async def on_ready():
         print('Logged in as:\n{0.user.name}\n{0.user.id}'.format(bot))
-        asyncio.get_event_loop().create_task(kafka_consume(bot))
+       # asyncio.get_event_loop().create_task(kafka_consume(bot))
 
     @bot.command(name='botstop', aliases=['bstop'])
     @commands.is_owner()
