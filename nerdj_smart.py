@@ -17,27 +17,29 @@ import random
 import logging
 import os
 import sys
-import threading
 
 import discord
 import yt_dlp as youtube_dl
 from async_timeout import timeout
 from discord.ext import commands
-import httpx
 from bs4 import BeautifulSoup
-from kafka import KafkaConsumer
 
 import vlc
-import kafka
+from typing import Optional
+
+import aiormq
+from aiormq.abc import DeliveredMessage
 
 player = vlc.MediaPlayer()
 
 mp_em = player.event_manager()
-producer = kafka.KafkaProducer(bootstrap_servers='localhost:9094')
 
-def send_to_kafka(message):
-    producer.send('nerdj_np', message.encode('utf-8'))
-    producer.flush()
+#producer = kafka.KafkaProducer(bootstrap_servers='localhost:9094')
+
+async def send_to_mq(song):
+
+    await channel.basic_publish(song, routing_key='nerdj/np')
+    
 
 def vlc_playNow(url):
     player.stop()
@@ -382,13 +384,13 @@ class VoiceState:
                 print("got song")
                 self.current.source.volume = self._volume
                 vlc_playNow(self.current.source.stream_url)
-                send_to_kafka(self.current.source.title)
+                await send_to_mq(self.current.source.title)
                 print("bruh")
             #If the song is looped
             elif self.loop == True:
                 #self.now = discord.FFmpegPCMAudio(self.current.source.stream_url, **YTDLSource.FFMPEG_OPTIONS)
                 vlc_playNow(self.current.source.stream_url)
-                send_to_kafka(self.current.source.title)
+                await send_to_mq(self.current.source.title)
 
             print("now waiting")
             await self.next.wait()
@@ -717,11 +719,15 @@ async def main():
     intents.typing = True
     intents.message_content = True
     global bot
-
+    global conn
+    conn = await aiormq.connect("amqp://localhost/")
+    global channel
+    channel = await conn.channel()
 
     bot =  UnfilteredBot(command_prefix='?', case_insensitive=True, description="The Superior Bot",intents=intents)
     
-
+    async def send_messages():
+            declare_ok = await channel.queue_declare("nerde/np", auto_delete=False)
     
 
     @bot.event
