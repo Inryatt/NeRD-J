@@ -1,2 +1,4 @@
 discord
 aiormq
+yt_dlp
+python_vlc
