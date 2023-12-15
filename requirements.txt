@@ -1,2 +1,9 @@
 discord
 aiormq
+yt_dlp
+python-vlc
+bs4
+discord.py
+youtube-dl
+pynacl
+vlc
