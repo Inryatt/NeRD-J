@@ -547,7 +547,7 @@ class Music(commands.Cog):
             return await ctx.send('Not playing any music right now...')
         await ctx.message.add_reaction('⏭')
        
-        ctx.voice_state.skip()
+        await ctx.voice_state.skip()
 
 
     @commands.command(name='queue')
