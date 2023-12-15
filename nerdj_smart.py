@@ -333,7 +333,6 @@ class VoiceState:
         self._loop = False
         self._autoplay = True
         self._volume = 0.5
-        self.skip_votes = set()
         self.audio_player = bot.loop.create_task(self.audio_player_task())
         mp_em.event_attach(vlc.EventType.MediaPlayerEndReached, self.play_song_if_ended)
 
@@ -406,8 +405,7 @@ class VoiceState:
         print(self.songs)
         if self.songs.empty():
             player.stop()
-        print(self.is_playing)
-        if self.is_playing:
+        else:
             self.play_next_song()
         
 
@@ -417,18 +415,18 @@ class VoiceState:
         self.current = None
 
       
-async def play_rafado(search: str):
-    try:
-        source = await YTDLSource.create_source_rafado(search=search, loop=bot.loop)
-    except YTDLError as e:
-        pass
-    else:
-        song = Song(source)
-        await voice_state_g.songs.put(song)
-        print("requested")
-        if player.get_state() == 0 or player.get_state() == 6 or player.get_state() == 5:
-            print("playing NOW")
-            voice_state_g.play_next_song()
+#async def play_rafado(search: str):
+#    try:
+#        source = await YTDLSource.create_source_rafado(search=search, loop=bot.loop)
+#    except YTDLError as e:
+#        pass
+#    else:
+#        song = Song(source)
+#        await voice_state_g.songs.put(song)
+#        print("requested")
+#        if player.get_state() == 0 or player.get_state() == 6 or player.get_state() == 5:
+#            print("playing NOW")
+#            voice_state_g.play_next_song()
 
 
 class Music(commands.Cog):
@@ -539,8 +537,7 @@ class Music(commands.Cog):
 
     @commands.command(name='skip', aliases=['s'])
     async def _skip(self, ctx: commands.Context):
-        """Vote to skip a song. The requester can automatically skip.
-        3 skip votes are needed for the song to be skipped.
+        """skip a song.
         """
 
         if not ctx.voice_state.is_playing:
