@@ -507,8 +507,7 @@ class Music(commands.Cog):
     @commands.command(name='now', aliases=['current', 'playing','np'])
     async def _now(self, ctx: commands.Context):
         """Displays the currently playing song."""
-        embed = ctx.voice_state.current.create_embed()
-        await ctx.send(embed=embed)
+        await ctx.send("Este comando não funciona, usa Shazam :(")
 
     @commands.command(name='pause', aliases=['pa'])
     @commands.has_permissions(manage_guild=True)
