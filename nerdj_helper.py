@@ -45,7 +45,7 @@ async def main():
     global bot
     bot =  commands.Bot(command_prefix='&', case_insensitive=True, description="The Superior Bot",intents=intents)
     global conn
-    conn = await aiormq.connect("amqp://localhost/")
+    conn = await aiormq.connect("amqp://192.168.2.20/")
     global channel
     channel = await conn.channel()
 

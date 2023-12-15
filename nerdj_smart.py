@@ -707,7 +707,7 @@ async def main():
     intents.message_content = True
     global bot
     global conn
-    conn = await aiormq.connect("amqp://localhost/")
+    conn = await aiormq.connect("amqp://192.168.2.20/")
     global channel
     channel = await conn.channel()
 
