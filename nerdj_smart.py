@@ -38,7 +38,7 @@ mp_em = player.event_manager()
 
 async def send_to_mq(song):
 
-    await channel.basic_publish(song, routing_key='nerdj/np')
+    await channel.basic_publish(song.encode('utf-8'), routing_key='nerdj/np')
     
 
 def vlc_playNow(url):
