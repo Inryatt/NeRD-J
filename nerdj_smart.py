@@ -405,8 +405,8 @@ class VoiceState:
         print(self.songs)
         if self.songs.empty():
             player.stop()
-        else:
-            yself.play_next_song()
+        elif self.is_playing:
+                self.play_next_song()
         
 
     async def stop(self):
