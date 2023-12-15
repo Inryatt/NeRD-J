@@ -403,9 +403,9 @@ class VoiceState:
         self.play_next_song()   
 
     def skip(self):
-        self.skip_votes.clear()
+        print(self.songs)
         if self.songs.empty():
-            player.pause()
+            player.stop()
         print(self.is_playing)
         if self.is_playing:
             self.play_next_song()
