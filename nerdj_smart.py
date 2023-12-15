@@ -406,7 +406,7 @@ class VoiceState:
         if self.songs.empty():
             player.stop()
         else:
-            self.play_next_song()
+            yself.play_next_song()
         
 
     async def stop(self):
@@ -544,7 +544,7 @@ class Music(commands.Cog):
             return await ctx.send('Not playing any music right now...')
         await ctx.message.add_reaction('⏭')
        
-        await ctx.voice_state.skip()
+        ctx.voice_state.skip()
 
 
     @commands.command(name='queue')
