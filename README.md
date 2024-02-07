@@ -15,7 +15,7 @@ Install requirements and run nerdj_simple.py
 ### Is the bot not working?
 
 BEFORE ANYTHING ELSE 
-`?fix` no #bot-spam (Discord)
+Run the command `?fix` in #bot-spam (Discord)
 
 
 If you change the name of the python scripts also update run.sh -- this is run by the systemctl service `nerdj`!
